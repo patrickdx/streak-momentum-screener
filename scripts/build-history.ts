@@ -22,8 +22,14 @@ const OUT_DIR = path.join(process.cwd(), "public", "history");
 async function main() {
   await fs.mkdir(OUT_DIR, { recursive: true });
 
+  /** market -> stored dates, newest first. Lets the client-rendered screener
+   *  offer a snapshot picker without reading the filesystem. */
+  const calendar: Record<string, string[]> = {};
+
   for (const market of MARKET_IDS) {
-    const dates = (await listSnapshotDates(market)).slice(0, MAX_DAYS);
+    const allDates = await listSnapshotDates(market);
+    calendar[market] = allDates;
+    const dates = allDates.slice(0, MAX_DAYS);
     const index: Record<string, HistoryPoint[]> = {};
 
     // Oldest first so each ticker's array reads chronologically.
@@ -48,6 +54,10 @@ async function main() {
       `  ${market}: ${dates.length} day(s), ${Object.keys(index).length} tickers -> ${kb}KB`,
     );
   }
+
+  const calFile = path.join(OUT_DIR, "dates.json");
+  await fs.writeFile(calFile, JSON.stringify(calendar), "utf8");
+  console.log(`  calendar -> ${Object.values(calendar).flat().length} snapshot(s) total`);
 }
 
 main().catch((err) => {

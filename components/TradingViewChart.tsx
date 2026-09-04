@@ -55,7 +55,9 @@ export default function TradingViewChart({
       interval: "D",
       timezone: "Etc/UTC",
       theme: "light",
-      style: "3", // area
+      // "1" is candlesticks. TradingView's style codes: 0 bars, 1 candles,
+      // 2 line, 3 area, 8 Heikin Ashi, 9 hollow candles.
+      style: "1",
       hide_side_toolbar: true,
       hide_top_toolbar: false,
       hide_legend: false,

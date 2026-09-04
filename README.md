@@ -312,9 +312,11 @@ highs, and the card says so.
 
 ### About the chart
 
-TradingView's advanced-chart widget is embedded via their script loader — it
-reads its configuration from the text content of its own `<script>` tag, so it
-has to be mounted imperatively rather than rendered by React.
+TradingView's advanced-chart widget, rendered as **candlesticks** (`style: "1"`
+— their codes are 0 bars, 1 candles, 2 line, 3 area, 8 Heikin Ashi, 9 hollow
+candles). It is embedded via their script loader, which reads its configuration
+from the text content of its own `<script>` tag, so it has to be mounted
+imperatively rather than rendered by React.
 
 It draws its frame before its data arrives, and sometimes the data never
 arrives: **Tokyo and Seoul both require a TradingView account**, and the
@@ -329,6 +331,12 @@ Filters come in two kinds, and the split matters:
 **Universe filters** — market, market cap, price, dollar volume, distance from
 the 52-week high, uptrend — change what gets fetched and scored, so they
 trigger a refetch.
+
+The same bar carries a **Day** control: `Live` plus every stored snapshot date
+for the selected market, which jumps straight to that archive page. Snapshots
+are per market, so it is disabled under "All markets". The date list comes from
+`public/history/dates.json`, written on `prebuild` — the screener is a static
+client-rendered page and cannot read the filesystem.
 
 **Refinements** — sector, minimum score, streak windows up, RSI ceiling,
 relative volume, hide-extended, at-52w-highs-only, and sort order — are applied
@@ -349,7 +357,8 @@ predate a schema change or have been edited by hand.
 ## The archive index
 
 `scripts/build-history.ts` runs on `prebuild` and inverts the snapshots into
-`public/history/<market>.json` — ticker to appearances. The detail card wants
+`public/history/<market>.json` — ticker to appearances — plus
+`public/history/dates.json`, the per-market calendar the Day picker reads. The detail card wants
 "which days has this name been in the screen, and where did it rank", which
 lives across every snapshot file; answering it in the browser would otherwise
 mean downloading the whole archive. It is generated, not committed, and capped

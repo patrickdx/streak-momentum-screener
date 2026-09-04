@@ -8,6 +8,8 @@ import Methodology from "@/components/Methodology";
 import { AlertIcon, EmptyIcon } from "@/components/Icons";
 import { ALL_MARKETS, MARKET_IDS, MARKETS, type MarketId } from "@/lib/markets";
 import { refine, runScreen } from "@/lib/screen";
+import { fetchCalendar } from "@/lib/history";
+import { useRouter } from "next/navigation";
 import SectorFilter from "@/components/SectorFilter";
 import { DEFAULT_PREFS, loadPrefs, savePrefs, type Prefs } from "@/lib/prefs";
 import { DEFAULT_REFINEMENTS } from "@/lib/types";
@@ -150,6 +152,9 @@ export default function ScreenerPage() {
   /** Guards against out-of-order responses when filters change quickly. */
   const runId = useRef(0);
   const [picked, setPicked] = useState<ScoredStock | null>(null);
+  /** Stored snapshot dates, so the live screener can jump into the archive. */
+  const [calendar, setCalendar] = useState<Partial<Record<MarketId, string[]>>>({});
+  const router = useRouter();
 
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     setFilters((f) => ({ ...f, [key]: value }));
@@ -157,6 +162,7 @@ export default function ScreenerPage() {
   useEffect(() => {
     setPrefs(loadPrefs());
     setHydrated(true);
+    fetchCalendar().then(setCalendar).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -347,6 +353,29 @@ export default function ScreenerPage() {
           >
             {LIMIT_OPTIONS.map((n) => (
               <option key={n} value={n}>Top {n}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label className="field-label" htmlFor="snapshot">Day</label>
+          <select
+            id="snapshot"
+            className="select"
+            value=""
+            disabled={market === "all" || (calendar[market as MarketId] ?? []).length === 0}
+            title={
+              market === "all"
+                ? "Snapshots are stored per market — pick a single market to browse past days"
+                : "Jump to a stored past trading day"
+            }
+            onChange={(e) => {
+              if (e.target.value) router.push(`/archive/${market}/${e.target.value}`);
+            }}
+          >
+            <option value="">Live</option>
+            {(calendar[market as MarketId] ?? []).map((d) => (
+              <option key={d} value={d}>{d}</option>
             ))}
           </select>
         </div>

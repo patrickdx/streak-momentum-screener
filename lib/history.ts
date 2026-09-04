@@ -25,6 +25,19 @@ async function loadIndex(market: MarketId): Promise<Index> {
   return pending;
 }
 
+type Calendar = Partial<Record<MarketId, string[]>>;
+
+let calendar: Promise<Calendar> | null = null;
+
+/** Stored snapshot dates per market, newest first. */
+export async function fetchCalendar(): Promise<Calendar> {
+  calendar ??= fetch(`${basePath()}/history/dates.json`)
+    .then((r) => (r.ok ? (r.json() as Promise<Calendar>) : {}))
+    // No calendar yet just means nothing has been captured.
+    .catch(() => ({}) as Calendar);
+  return calendar;
+}
+
 export async function fetchHistory(
   market: MarketId,
   ticker: string,
