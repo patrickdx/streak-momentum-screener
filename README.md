@@ -285,6 +285,76 @@ To backfill or overwrite: `npm run snapshot -- --force --date=2026-09-04`. Note
 this fetches *current* data and files it under the date you name — it can't
 recover a day that was missed.
 
+## The detail card
+
+Clicking any row — or any heatmap tile — opens a sheet for that stock:
+
+- the momentum score with all five components broken out
+- the four streak windows with their individual returns
+- a **breakout ladder**: whether the price is at the top of its 1-month,
+  3-month, 6-month and 52-week range
+- position in the 52-week range and against the 20/50/200-day averages
+- the TradingView chart, plus fundamentals and technicals
+- every day this name has appeared in the stored archive, and which of those
+  days it was flagged at a 52-week high
+
+Two things worth knowing about how it gets its data:
+
+**Extra columns are fetched per symbol, on demand.** Adding ~25 fields to the
+main sweep would inflate every request and every archived snapshot for data
+that is only ever read one row at a time.
+
+**The breakout ladder takes both sides of every comparison from the same
+fetch.** On an archive page the row's close is historical while the period
+highs are live; mixing them reports a stock as far below a high it was sitting
+on that day. `fetchDetail` therefore returns the live close alongside the live
+highs, and the card says so.
+
+### About the chart
+
+TradingView's advanced-chart widget is embedded via their script loader — it
+reads its configuration from the text content of its own `<script>` tag, so it
+has to be mounted imperatively rather than rendered by React.
+
+It draws its frame before its data arrives, and sometimes the data never
+arrives: **Tokyo and Seoul both require a TradingView account**, and the
+widget's streaming connection is blocked in some browsers. The "Open on
+TradingView" link is therefore rendered unconditionally rather than as a
+fallback — it is the reliable path, and the embed is the bonus.
+
+## Filters
+
+Filters come in two kinds, and the split matters:
+
+**Universe filters** — market, market cap, price, dollar volume, distance from
+the 52-week high, uptrend — change what gets fetched and scored, so they
+trigger a refetch.
+
+**Refinements** — sector, minimum score, streak windows up, RSI ceiling,
+relative volume, hide-extended, at-52w-highs-only, and sort order — are applied
+*after* scoring. They deliberately do not change the percentile baseline:
+narrowing to one sector should surface that sector's best names with the scores
+they earned against the whole market, not re-rank them among themselves.
+
+Because refinements are a pure function of the scored list, `runScreen` returns
+every candidate rather than a top-N and the UI filters in memory — moving a
+slider is instant instead of re-sweeping four markets. They also run before the
+top-N slice, so "top 50 healthcare names" really is the best 50 in healthcare.
+
+Everything is saved to `localStorage` under a versioned key
+([lib/prefs.ts](lib/prefs.ts)). Reads are sanitised field by field rather than
+trusted: storage throws outright in some privacy modes, and a stored value may
+predate a schema change or have been edited by hand.
+
+## The archive index
+
+`scripts/build-history.ts` runs on `prebuild` and inverts the snapshots into
+`public/history/<market>.json` — ticker to appearances. The detail card wants
+"which days has this name been in the screen, and where did it rank", which
+lives across every snapshot file; answering it in the browser would otherwise
+mean downloading the whole archive. It is generated, not committed, and capped
+at 90 days so it stays small enough to fetch lazily.
+
 ## The heatmap
 
 A squarified treemap ([lib/treemap.ts](lib/treemap.ts), Bruls–Huizing–van Wijk),

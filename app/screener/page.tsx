@@ -1,13 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ScreenerTable from "@/components/ScreenerTable";
 import Heatmap from "@/components/Heatmap";
+import StockDetail from "@/components/StockDetail";
 import Methodology from "@/components/Methodology";
 import { AlertIcon, EmptyIcon } from "@/components/Icons";
 import { ALL_MARKETS, MARKET_IDS, MARKETS, type MarketId } from "@/lib/markets";
-import { runScreen } from "@/lib/screen";
-import type { ScreenerResponse } from "@/lib/types";
+import { refine, runScreen } from "@/lib/screen";
+import SectorFilter from "@/components/SectorFilter";
+import { DEFAULT_PREFS, loadPrefs, savePrefs, type Prefs } from "@/lib/prefs";
+import { DEFAULT_REFINEMENTS } from "@/lib/types";
+import type {
+  Refinements,
+  ScoredStock,
+  ScreenerResponse,
+  SortField,
+} from "@/lib/types";
 
 type MarketChoice = MarketId | "all";
 
@@ -75,6 +84,22 @@ const LIQ_OPTIONS = [
 
 const LIMIT_OPTIONS = [25, 50, 100, 200];
 
+const SORT_OPTIONS: { label: string; value: SortField }[] = [
+  { label: "Momentum score", value: "score" },
+  { label: "1-week return", value: "perfW" },
+  { label: "1-month return", value: "perf1M" },
+  { label: "3-month return", value: "perf3M" },
+  { label: "6-month return", value: "perf6M" },
+  { label: "Relative volume", value: "relVolume" },
+  { label: "Market cap", value: "marketCap" },
+  { label: "Closest to 52w high", value: "pctFromHigh" },
+];
+
+const SCORE_STEPS = [0, 70, 80, 85, 90];
+const RSI_STEPS = [100, 80, 70, 60];
+const RVOL_STEPS = [0, 1, 1.5, 2, 3];
+
+
 const sameFilters = (a: Filters, b: Filters) =>
   a.minMarketCap === b.minMarketCap &&
   a.maxPctFromHigh === b.maxPctFromHigh &&
@@ -91,19 +116,52 @@ function Stat({ label, value, title }: { label: string; value: string; title?: s
 }
 
 export default function ScreenerPage() {
-  const [filters, setFilters] = useState<Filters>(DEFAULTS);
-  const [limit, setLimit] = useState(50);
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
+  /** Preferences live in localStorage, which only exists after mount. */
+  const [hydrated, setHydrated] = useState(false);
 
-  const [market, setMarket] = useState<MarketChoice>("us");
-  const [view, setView] = useState<"table" | "heatmap">("table");
+  const filters: Filters = {
+    minMarketCap: prefs.minMarketCap,
+    maxPctFromHigh: prefs.maxPctFromHigh,
+    minDollarVolume: prefs.minDollarVolume,
+    requireUptrend: prefs.requireUptrend,
+  };
+  const { limit, view, market, refinements } = prefs;
+
+  const patch = (next: Partial<Prefs>) => setPrefs((p) => ({ ...p, ...next }));
+  const setRefine = (next: Partial<Refinements>) =>
+    setPrefs((p) => ({ ...p, refinements: { ...p.refinements, ...next } }));
+  const setFilters = (next: Filters | ((f: Filters) => Filters)) =>
+    setPrefs((p) => ({
+      ...p,
+      ...(typeof next === "function"
+        ? next({
+            minMarketCap: p.minMarketCap,
+            maxPctFromHigh: p.maxPctFromHigh,
+            minDollarVolume: p.minDollarVolume,
+            requireUptrend: p.requireUptrend,
+          })
+        : next),
+    }));
+
   const [data, setData] = useState<ScreenerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** Guards against out-of-order responses when filters change quickly. */
   const runId = useRef(0);
+  const [picked, setPicked] = useState<ScoredStock | null>(null);
 
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     setFilters((f) => ({ ...f, [key]: value }));
+
+  useEffect(() => {
+    setPrefs(loadPrefs());
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (hydrated) savePrefs(prefs);
+  }, [prefs, hydrated]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -113,14 +171,11 @@ export default function ScreenerPage() {
     // ship as static files.
     const run = ++runId.current;
     try {
-      const result = await runScreen(
-        {
-          ...filters,
-          minPrice: 5,
-          markets: market === "all" ? [...MARKET_IDS] : [market],
-        },
-        limit,
-      );
+      const result = await runScreen({
+        ...filters,
+        minPrice: 5,
+        markets: market === "all" ? [...MARKET_IDS] : [market],
+      });
       // A slower earlier run must not overwrite a newer one.
       if (run !== runId.current) return;
       setData(result);
@@ -135,11 +190,32 @@ export default function ScreenerPage() {
     } finally {
       if (run === runId.current) setLoading(false);
     }
-  }, [filters, limit, market]);
+    // Refinements are applied below, not here: they are a pure function of
+    // this result, so moving a slider must not re-sweep four markets.
+  }, [
+    filters.minMarketCap,
+    filters.maxPctFromHigh,
+    filters.minDollarVolume,
+    filters.requireUptrend,
+    market,
+  ]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (hydrated) load();
+  }, [load, hydrated]);
+
+  /** Refined and ordered client-side, instantly. */
+  const shown = useMemo(
+    () => (data ? refine(data.stocks, refinements).slice(0, limit) : []),
+    [data, refinements, limit],
+  );
+  const matched = useMemo(
+    () => (data ? refine(data.stocks, refinements).length : 0),
+    [data, refinements],
+  );
+
+  const refineActive =
+    JSON.stringify(refinements) !== JSON.stringify(DEFAULT_REFINEMENTS);
 
   const asOf = data
     ? new Date(data.meta.asOf).toLocaleTimeString("en-US", {
@@ -168,9 +244,14 @@ export default function ScreenerPage() {
           <Stat
             label="Passed"
             value={data ? data.meta.candidateCount.toLocaleString() : "—"}
-            title="How many cleared every filter"
+            title="Cleared the momentum gates"
           />
-          <Stat label="Showing" value={data ? String(data.meta.returned) : "—"} />
+          <Stat
+            label="Matched"
+            value={data ? matched.toLocaleString() : "—"}
+            title="Also survived the refinements below"
+          />
+          <Stat label="Showing" value={data ? String(shown.length) : "—"} />
           <Stat label="Updated" value={asOf} />
         </div>
       </header>
@@ -180,7 +261,7 @@ export default function ScreenerPage() {
           <button
             key={m.id}
             className={`market-tab${market === m.id ? " on" : ""}`}
-            onClick={() => setMarket(m.id)}
+            onClick={() => patch({ market: m.id })}
             aria-pressed={market === m.id}
           >
             <span className="market-code">{m.code}</span>
@@ -189,7 +270,7 @@ export default function ScreenerPage() {
         ))}
         <button
           className={`market-tab${market === "all" ? " on" : ""}`}
-          onClick={() => setMarket("all")}
+          onClick={() => patch({ market: "all" })}
           aria-pressed={market === "all"}
           title="Every market at once. Each stock is still ranked against its own market, never pooled."
         >
@@ -262,7 +343,7 @@ export default function ScreenerPage() {
             id="limit"
             className="select"
             value={limit}
-            onChange={(e) => setLimit(Number(e.target.value))}
+            onChange={(e) => patch({ limit: Number(e.target.value) })}
           >
             {LIMIT_OPTIONS.map((n) => (
               <option key={n} value={n}>Top {n}</option>
@@ -289,14 +370,14 @@ export default function ScreenerPage() {
           <div className="view-toggle">
             <button
               className={view === "table" ? "on" : ""}
-              onClick={() => setView("table")}
+              onClick={() => patch({ view: "table" })}
               aria-pressed={view === "table"}
             >
               Table
             </button>
             <button
               className={view === "heatmap" ? "on" : ""}
-              onClick={() => setView("heatmap")}
+              onClick={() => patch({ view: "heatmap" })}
               aria-pressed={view === "heatmap"}
             >
               Heatmap
@@ -307,6 +388,117 @@ export default function ScreenerPage() {
         <button className="btn btn-primary" onClick={load} disabled={loading}>
           {loading ? "Loading…" : "Refresh"}
         </button>
+      </section>
+
+
+      <section className="refine-bar">
+        <div className="field">
+          <label className="field-label" htmlFor="sortby">Sort by</label>
+          <select
+            id="sortby"
+            className="select"
+            value={refinements.sortBy}
+            onChange={(e) => setRefine({ sortBy: e.target.value as SortField })}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <span className="field-label">Sector</span>
+          <SectorFilter
+            available={data?.meta.sectors ?? []}
+            selected={refinements.sectors}
+            onChange={(sectors) => setRefine({ sectors })}
+          />
+        </div>
+
+        <div className="field">
+          <label className="field-label" htmlFor="minscore">Minimum score</label>
+          <select
+            id="minscore"
+            className="select"
+            value={refinements.minScore}
+            onChange={(e) => setRefine({ minScore: Number(e.target.value) })}
+          >
+            {SCORE_STEPS.map((n) => (
+              <option key={n} value={n}>{n === 0 ? "Any" : `${n}+`}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label className="field-label" htmlFor="minlegs">Streak windows up</label>
+          <select
+            id="minlegs"
+            className="select"
+            value={refinements.minLegs}
+            onChange={(e) => setRefine({ minLegs: Number(e.target.value) })}
+          >
+            {[0, 1, 2, 3, 4].map((n) => (
+              <option key={n} value={n}>{n === 0 ? "Any" : `${n} of 4+`}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label className="field-label" htmlFor="maxrsi">RSI below</label>
+          <select
+            id="maxrsi"
+            className="select"
+            value={refinements.maxRsi}
+            onChange={(e) => setRefine({ maxRsi: Number(e.target.value) })}
+          >
+            {RSI_STEPS.map((n) => (
+              <option key={n} value={n}>{n === 100 ? "Any" : n}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label className="field-label" htmlFor="minrvol">Rel. volume</label>
+          <select
+            id="minrvol"
+            className="select"
+            value={refinements.minRelVolume}
+            onChange={(e) => setRefine({ minRelVolume: Number(e.target.value) })}
+          >
+            {RVOL_STEPS.map((n) => (
+              <option key={n} value={n}>{n === 0 ? "Any" : `${n}x+`}</option>
+            ))}
+          </select>
+        </div>
+
+        <label className="toggle" title="Hide names that are stretched far above their 20-day average or with RSI over 80">
+          <input
+            type="checkbox"
+            checked={refinements.excludeExtended}
+            onChange={(e) => setRefine({ excludeExtended: e.target.checked })}
+          />
+          Hide extended
+        </label>
+
+        <label className="toggle" title="Only names within 2% of their 52-week high">
+          <input
+            type="checkbox"
+            checked={refinements.onlyNewHighs}
+            onChange={(e) => setRefine({ onlyNewHighs: e.target.checked })}
+          />
+          At 52w highs only
+        </label>
+
+        <div className="filters-spacer" />
+
+        {refineActive && (
+          <button
+            className="btn btn-sm"
+            onClick={() => setPrefs((p) => ({ ...p, refinements: DEFAULT_REFINEMENTS }))}
+          >
+            Clear refinements
+          </button>
+        )}
       </section>
 
       {data && data.meta.perMarket.length > 1 && (
@@ -352,29 +544,51 @@ export default function ScreenerPage() {
             <div key={i} className="skeleton-row" />
           ))}
         </div>
-      ) : data && data.stocks.length === 0 ? (
+      ) : data && shown.length === 0 ? (
         <div className="state">
           <EmptyIcon />
           <div className="state-title">Nothing clears these filters</div>
           <div className="state-body">
-            Momentum is thin right now, or the filters are tight. Try allowing a
-            larger distance from the 52-week high, or switching off
-            &ldquo;Uptrend intact.&rdquo;
+            {refineActive ? (
+              <>
+                {data.meta.candidateCount.toLocaleString()} names cleared the
+                momentum gates, but none survived the refinements. Try relaxing
+                the sector, score or RSI settings.
+              </>
+            ) : (
+              <>
+                Momentum is thin right now, or the filters are tight. Try
+                allowing a larger distance from the 52-week high, or switching
+                off &ldquo;Uptrend intact.&rdquo;
+              </>
+            )}
           </div>
-          <button className="btn" onClick={() => setFilters(PRESETS[3].filters)}>
-            Widen the search
+          <button
+            className="btn"
+            onClick={() =>
+              refineActive
+                ? setPrefs((p) => ({ ...p, refinements: DEFAULT_REFINEMENTS }))
+                : setFilters(PRESETS[3].filters)
+            }
+          >
+            {refineActive ? "Clear refinements" : "Widen the search"}
           </button>
         </div>
       ) : data ? (
         view === "table" ? (
-          <ScreenerTable stocks={data.stocks} showMarket={market === "all"} />
+          <ScreenerTable stocks={shown} showMarket={market === "all"} />
         ) : (
           <Heatmap
-            stocks={data.stocks}
+            stocks={shown}
             groupBy={market === "all" ? "market" : "sector"}
+            onSelect={setPicked}
           />
         )
       ) : null}
+
+      {picked && (
+        <StockDetail stock={picked} onClose={() => setPicked(null)} />
+      )}
 
       <Methodology />
 

@@ -6,6 +6,7 @@ import { FLAG_CLASS, FLAG_HINT, FLAG_LABEL, fmtCap, fmtPct, fmtPrice, signClass 
 import { ExternalIcon } from "./Icons";
 import Logo from "./Logo";
 import { MARKETS } from "@/lib/markets";
+import StockDetail from "./StockDetail";
 
 type SortKey =
   | "score"
@@ -105,12 +106,16 @@ export default function ScreenerTable({
   stocks,
   movement,
   showMarket = false,
+  asOfDate,
 }: {
   stocks: ScoredStock[];
   movement?: Movement;
   /** Adds a market column — only useful when several markets are merged. */
   showMarket?: boolean;
+  /** Set on archive pages so the detail card can flag its data as historical. */
+  asOfDate?: string;
 }) {
+  const [opened, setOpened] = useState<ScoredStock | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "score",
     dir: "desc",
@@ -162,6 +167,7 @@ export default function ScreenerTable({
   };
 
   return (
+    <>
     <div className="table-wrap">
       <table>
         <thead>
@@ -187,7 +193,20 @@ export default function ScreenerTable({
         </thead>
         <tbody>
           {rows.map((s, i) => (
-            <tr key={s.ticker}>
+            <tr
+              key={s.ticker}
+              className="row-click"
+              tabIndex={0}
+              role="button"
+              aria-label={`Open details for ${s.name}`}
+              onClick={() => setOpened(s)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setOpened(s);
+                }
+              }}
+            >
               <td className="left rank">{i + 1}</td>
               <td className="left">
                 <div className="sym-cell">
@@ -199,6 +218,7 @@ export default function ScreenerTable({
                   target="_blank"
                   rel="noreferrer"
                   title={`Open ${s.name} on TradingView`}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {s.name}
                   <ExternalIcon />
@@ -263,5 +283,13 @@ export default function ScreenerTable({
         </tbody>
       </table>
     </div>
+    {opened && (
+      <StockDetail
+        stock={opened}
+        asOfDate={asOfDate}
+        onClose={() => setOpened(null)}
+      />
+    )}
+    </>
   );
 }

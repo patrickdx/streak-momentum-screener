@@ -45,10 +45,12 @@ const SECTOR_SHORT: Record<string, string> = {
 export default function Heatmap({
   stocks,
   groupBy = "sector",
+  onSelect,
 }: {
   stocks: ScoredStock[];
   /** Group by market when several are merged, otherwise by sector. */
   groupBy?: "sector" | "market";
+  onSelect?: (stock: ScoredStock) => void;
 }) {
   const [hovered, setHovered] = useState<ScoredStock | null>(null);
 
@@ -108,12 +110,10 @@ export default function Heatmap({
               const showTicker = t.globalW > 4.6 && t.globalH > 5;
               const showPerf = t.globalW > 6 && t.globalH > 8.5;
               return (
-                <a
+                <button
                   key={s.ticker}
                   className="hm-tile"
-                  href={`https://www.tradingview.com/symbols/${s.ticker.replace(":", "-")}/`}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={() => onSelect?.(s)}
                   style={{
                     left: pct(t.x),
                     top: pct(t.y),
@@ -130,7 +130,7 @@ export default function Heatmap({
                 >
                   {showTicker && <span className="hm-ticker">{s.name}</span>}
                   {showPerf && <span className="hm-perf">{fmtPct(s.perf1M, 0)}</span>}
-                </a>
+                </button>
               );
             })}
           </div>
@@ -155,7 +155,7 @@ export default function Heatmap({
               1M {fmtPct(hovered.perf1M)} · ${fmtCap(hovered.marketCap)}
             </>
           ) : (
-            `Grouped by ${groupBy}. Tile size reflects market cap in USD (square-root scaled). Hover for detail, click to open the chart.`
+            `Grouped by ${groupBy}. Tile size reflects market cap in USD (square-root scaled). Hover for detail, click a tile to open it.`
           )}
         </div>
       </div>

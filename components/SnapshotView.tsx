@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ScreenerTable from "./ScreenerTable";
 import Heatmap from "./Heatmap";
+import StockDetail from "./StockDetail";
 import type { ScoredStock } from "@/lib/types";
 
 export default function SnapshotView({
@@ -10,12 +11,15 @@ export default function SnapshotView({
   priorScores,
   priorRanks,
   hasPrior,
+  asOfDate,
 }: {
   stocks: ScoredStock[];
   priorScores: Record<string, number>;
   priorRanks: Record<string, number>;
   hasPrior: boolean;
+  asOfDate: string;
 }) {
+  const [selected, setSelected] = useState<ScoredStock | null>(null);
   const [view, setView] = useState<"table" | "heatmap">("table");
 
   return (
@@ -48,9 +52,18 @@ export default function SnapshotView({
         <ScreenerTable
           stocks={stocks}
           movement={hasPrior ? { ranks: priorRanks, scores: priorScores } : undefined}
+          asOfDate={asOfDate}
         />
       ) : (
-        <Heatmap stocks={stocks} />
+        <Heatmap stocks={stocks} onSelect={setSelected} />
+      )}
+
+      {selected && (
+        <StockDetail
+          stock={selected}
+          asOfDate={asOfDate}
+          onClose={() => setSelected(null)}
+        />
       )}
     </>
   );

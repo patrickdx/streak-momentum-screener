@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { listSnapshotDates, listStoredMarkets, readSnapshot } from "@/lib/snapshots";
 import { MARKETS, isMarketId } from "@/lib/markets";
 import SnapshotView from "@/components/SnapshotView";
+import DatePicker from "@/components/DatePicker";
 
 /** One static page per stored snapshot. */
 export async function generateStaticParams() {
@@ -46,7 +47,6 @@ export default async function SnapshotPage({ params }: Props) {
   // Neighbours for prev/next navigation. Dates sort newest-first.
   const dates = await listSnapshotDates(market);
   const i = dates.indexOf(date);
-  const newer = i > 0 ? dates[i - 1] : null;
   const older = i >= 0 && i < dates.length - 1 ? dates[i + 1] : null;
 
   const prior = older ? await readSnapshot(market, older) : null;
@@ -75,18 +75,7 @@ export default async function SnapshotPage({ params }: Props) {
             {prior && ` Movement is measured against ${older}.`}
           </p>
         </div>
-        <div className="day-nav">
-          {older ? (
-            <Link href={`/archive/${market}/${older}`} className="btn btn-sm">← {older}</Link>
-          ) : (
-            <span className="btn btn-sm" aria-disabled style={{ opacity: 0.45 }}>← Earlier</span>
-          )}
-          {newer ? (
-            <Link href={`/archive/${market}/${newer}`} className="btn btn-sm">{newer} →</Link>
-          ) : (
-            <span className="btn btn-sm" aria-disabled style={{ opacity: 0.45 }}>Later →</span>
-          )}
-        </div>
+        <DatePicker market={market} dates={dates} current={date} />
       </header>
 
       <SnapshotView
@@ -94,6 +83,7 @@ export default async function SnapshotPage({ params }: Props) {
         priorScores={Object.fromEntries(priorScores)}
         priorRanks={Object.fromEntries(priorRanks)}
         hasPrior={prior !== null}
+        asOfDate={date}
       />
 
       <div className="footer">
