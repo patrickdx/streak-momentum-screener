@@ -1,4 +1,6 @@
 import type { AppliedFilters, Flag, RawQuote, ScoredStock } from "./types";
+import type { MarketUniverse } from "./tradingview";
+import type { MarketId } from "./markets";
 
 /* ------------------------------------------------------------------ *
  * Momentum model
@@ -288,7 +290,8 @@ export function scoreUniverse(
 /** Hard requirements to appear at all — a screen, not a leaderboard. */
 function passesGates(s: ScoredStock, o: ScoreOptions): boolean {
   if (s.marketCap < o.minMarketCap) return false;
-  if (s.close < o.minPrice) return false;
+  // In USD: a JPY or KRW price compared against a dollar floor is meaningless.
+  if (s.closeUsd < o.minPrice) return false;
 
   // Must actually be advancing on both the medium and intermediate horizon.
   if ((s.perf1M ?? -1) <= 0) return false;
@@ -304,4 +307,49 @@ function passesGates(s: ScoredStock, o: ScoreOptions): boolean {
   if (s.pctFromHigh !== null && s.pctFromHigh < -o.maxPctFromHigh) return false;
 
   return true;
+}
+
+
+/**
+ * Scores several markets and merges the result.
+ *
+ * Each market is ranked against **itself**, never against the pooled set. A
+ * percentile is a statement about a stock's peers, and Tokyo and New York can
+ * be in completely different regimes — pooling them would mean a flat month in
+ * a strong market outranking a good month in a weak one purely because of the
+ * company it was measured against. Once every name carries a within-market
+ * percentile the scores are comparable, so the merged list sorts cleanly.
+ */
+export function scoreMarkets(
+  universes: MarketUniverse[],
+  opts: ScoreOptions,
+): {
+  scored: ScoredStock[];
+  perMarket: { market: MarketId; universeSize: number; candidateCount: number }[];
+  universeSize: number;
+} {
+  const perMarket: {
+    market: MarketId;
+    universeSize: number;
+    candidateCount: number;
+  }[] = [];
+  const merged: ScoredStock[] = [];
+
+  for (const u of universes) {
+    const { scored, candidateCount } = scoreUniverse(u.quotes, opts);
+    perMarket.push({
+      market: u.market,
+      universeSize: u.quotes.length,
+      candidateCount,
+    });
+    merged.push(...scored);
+  }
+
+  merged.sort((a, b) => b.score - a.score);
+
+  return {
+    scored: merged,
+    perMarket,
+    universeSize: universes.reduce((n, u) => n + u.quotes.length, 0),
+  };
 }

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { groupedTreemap } from "@/lib/treemap";
 import { fmtCap, fmtPct } from "@/lib/format";
 import type { ScoredStock } from "@/lib/types";
+import { MARKETS } from "@/lib/markets";
 
 /**
  * Colour buckets for the momentum score. Fixed cut points, deliberately not
@@ -41,18 +42,26 @@ const SECTOR_SHORT: Record<string, string> = {
   "Miscellaneous": "Other",
 };
 
-export default function Heatmap({ stocks }: { stocks: ScoredStock[] }) {
+export default function Heatmap({
+  stocks,
+  groupBy = "sector",
+}: {
+  stocks: ScoredStock[];
+  /** Group by market when several are merged, otherwise by sector. */
+  groupBy?: "sector" | "market";
+}) {
   const [hovered, setHovered] = useState<ScoredStock | null>(null);
 
   const groups = useMemo(() => {
-    const bySector = new Map<string, ScoredStock[]>();
+    const buckets = new Map<string, ScoredStock[]>();
     for (const s of stocks) {
-      const key = s.sector ?? "Other";
-      const list = bySector.get(key);
+      const key =
+        groupBy === "market" ? MARKETS[s.market].label : (s.sector ?? "Other");
+      const list = buckets.get(key);
       if (list) list.push(s);
-      else bySector.set(key, [s]);
+      else buckets.set(key, [s]);
     }
-    return [...bySector.entries()].map(([key, items]) => ({
+    return [...buckets.entries()].map(([key, items]) => ({
       key,
       items: items.map((s) => ({
         item: s,
@@ -61,7 +70,7 @@ export default function Heatmap({ stocks }: { stocks: ScoredStock[] }) {
         value: Math.sqrt(Math.max(s.marketCap, 1)),
       })),
     }));
-  }, [stocks]);
+  }, [stocks, groupBy]);
 
   // Canvas is a 100x100 abstract box rendered with percentage CSS. The label
   // strip is 18px inside a ~460px-tall canvas, hence ~4 units.
@@ -117,7 +126,7 @@ export default function Heatmap({ stocks }: { stocks: ScoredStock[] }) {
                   onMouseLeave={() => setHovered((h) => (h === s ? null : h))}
                   onFocus={() => setHovered(s)}
                   onBlur={() => setHovered(null)}
-                  title={`${s.name} — ${s.description}\nScore ${s.score.toFixed(1)} · 1M ${fmtPct(s.perf1M)} · ${fmtCap(s.marketCap)} cap`}
+                  title={`${s.name} — ${s.description}\n${MARKETS[s.market].label} · score ${s.score.toFixed(1)} · 1M ${fmtPct(s.perf1M)} · $${fmtCap(s.marketCap)} cap`}
                 >
                   {showTicker && <span className="hm-ticker">{s.name}</span>}
                   {showPerf && <span className="hm-perf">{fmtPct(s.perf1M, 0)}</span>}
@@ -141,12 +150,12 @@ export default function Heatmap({ stocks }: { stocks: ScoredStock[] }) {
         <div className="hm-readout">
           {hovered ? (
             <>
-              <strong>{hovered.name}</strong> {hovered.description} · score{" "}
-              {hovered.score.toFixed(1)} · 1M {fmtPct(hovered.perf1M)} ·{" "}
-              {fmtCap(hovered.marketCap)}
+              <strong>{hovered.name}</strong> {hovered.description} ·{" "}
+              {MARKETS[hovered.market].label} · score {hovered.score.toFixed(1)} ·
+              1M {fmtPct(hovered.perf1M)} · ${fmtCap(hovered.marketCap)}
             </>
           ) : (
-            "Tile size reflects market cap (square-root scaled). Hover for detail, click to open the chart."
+            `Grouped by ${groupBy}. Tile size reflects market cap in USD (square-root scaled). Hover for detail, click to open the chart.`
           )}
         </div>
       </div>

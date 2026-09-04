@@ -1,4 +1,7 @@
+import type { MarketId } from "./markets";
+
 export type RawQuote = {
+  market: MarketId;
   ticker: string;        // "NASDAQ:AAPL"
   name: string;          // "AAPL"
   description: string;   // "Apple Inc."
@@ -6,9 +9,12 @@ export type RawQuote = {
   exchange: string;
   sector: string | null;
   industry: string | null;
-  close: number;
+  close: number;         // local currency, as quoted
+  closeUsd: number;      // converted, for cross-market gates
+  currency: string;      // "JPY"
   change: number;        // today's % change
-  marketCap: number;
+  marketCap: number;     // ALWAYS USD, so one filter means the same everywhere
+  dollarVolume: number;  // avg 30d volume x price, in USD
 
   perfW: number | null;
   perf1M: number | null;
@@ -56,7 +62,9 @@ export type ScoredStock = RawQuote & {
 export type ScreenerResponse = {
   stocks: ScoredStock[];
   meta: {
-    universeSize: number;    // liquid US names ranked against
+    universeSize: number;    // liquid names ranked against, summed over markets
+    perMarket: { market: MarketId; universeSize: number; candidateCount: number }[];
+    fxRates: Record<string, number>;
     candidateCount: number;  // passed momentum gates
     returned: number;
     asOf: string;
@@ -65,6 +73,7 @@ export type ScreenerResponse = {
 };
 
 export type AppliedFilters = {
+  markets: MarketId[];
   minMarketCap: number;
   minPrice: number;
   minDollarVolume: number;
@@ -82,7 +91,8 @@ export type AppliedFilters = {
  * comparable — the interactive filters on the live screener don't affect them.
  */
 export type Snapshot = {
-  date: string;        // "2026-09-04", US Eastern trading date
+  market: MarketId;
+  date: string;        // "2026-09-04", exchange-local trading date
   capturedAt: string;  // ISO timestamp of the run
   universeSize: number;
   candidateCount: number;
@@ -92,6 +102,7 @@ export type Snapshot = {
 
 /** What the archive list needs, without loading every stock of every day. */
 export type SnapshotSummary = {
+  market: MarketId;
   date: string;
   capturedAt: string;
   universeSize: number;

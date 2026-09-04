@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchUniverse } from "@/lib/tradingview";
-import { scoreUniverse } from "@/lib/momentum";
+import { scoreMarkets } from "@/lib/momentum";
+import { parseMarkets } from "@/lib/markets";
 import type { AppliedFilters, ScreenerResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -23,6 +24,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
   const filters: AppliedFilters = {
+    markets: parseMarkets(searchParams.get("markets")),
     minMarketCap: clampNum(searchParams.get("minMarketCap"), 1e9, 5e7, 5e12),
     minPrice: clampNum(searchParams.get("minPrice"), 5, 0, 10_000),
     minDollarVolume: clampNum(searchParams.get("minDollarVolume"), 1e7, 0, 1e10),
@@ -32,20 +34,23 @@ export async function GET(request: Request) {
   const limit = clampNum(searchParams.get("limit"), 50, 10, 300);
 
   try {
-    const universe = await fetchUniverse({
+    const { universes, fxRates } = await fetchUniverse({
+      markets: filters.markets,
       minMarketCap: filters.minMarketCap,
       minPrice: filters.minPrice,
       minDollarVolume: filters.minDollarVolume,
     });
 
-    const { scored, candidateCount } = scoreUniverse(universe, filters);
+    const { scored, perMarket, universeSize } = scoreMarkets(universes, filters);
     const stocks = scored.slice(0, limit);
 
     const payload: ScreenerResponse = {
       stocks,
       meta: {
-        universeSize: universe.length,
-        candidateCount,
+        universeSize,
+        perMarket,
+        fxRates,
+        candidateCount: perMarket.reduce((n, m) => n + m.candidateCount, 0),
         returned: stocks.length,
         asOf: new Date().toISOString(),
         filters,

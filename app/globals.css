@@ -1646,3 +1646,120 @@ tbody tr:hover .ext {
   padding: 1px 5px;
   color: var(--fg);
 }
+
+/* --------------------------- markets ----------------------------- */
+
+.mkt-tag {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-mid);
+  color: var(--fg-muted);
+  cursor: help;
+}
+
+.cur {
+  font-size: 9.5px;
+  color: var(--fg-subtle);
+  margin-left: 4px;
+  letter-spacing: 0.02em;
+}
+
+.market-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 4px 0 18px;
+}
+
+.market-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--fg-secondary);
+  background: var(--bg);
+  transition: all 0.12s ease;
+}
+
+.market-tab:hover {
+  border-color: var(--fg-subtle);
+  background: var(--bg-raised);
+}
+
+.market-tab.on {
+  background: var(--blue-subtle);
+  border-color: var(--blue);
+  color: var(--blue-deep);
+}
+
+.market-code {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+}
+
+.market-tab.on .market-code {
+  background: var(--blue);
+  color: #fff;
+}
+
+/* per-market counts under the filter bar */
+
+.market-counts {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+
+.market-count b {
+  font-family: var(--mono);
+  color: var(--fg-secondary);
+  font-weight: 600;
+}
+
+.market-note-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.market-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow-sm);
+}
+
+.market-note-label {
+  font-weight: 600;
+  font-size: 14.5px;
+  color: var(--fg);
+}
+
+.market-note-detail {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  margin-top: 1px;
+}

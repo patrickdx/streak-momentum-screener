@@ -5,6 +5,7 @@ import type { ScoredStock } from "@/lib/types";
 import { FLAG_CLASS, FLAG_HINT, FLAG_LABEL, fmtCap, fmtPct, fmtPrice, signClass } from "@/lib/format";
 import { ExternalIcon } from "./Icons";
 import Logo from "./Logo";
+import { MARKETS } from "@/lib/markets";
 
 type SortKey =
   | "score"
@@ -33,7 +34,7 @@ const COLUMNS: { key: SortKey | null; label: string; left?: boolean; title?: str
   { key: "rsi", label: "RSI", title: "Relative Strength Index — above 70 is hot, above 80 is stretched" },
   { key: "relVolume", label: "R.Vol", title: "Today's volume versus its own 10-day average" },
   { key: "close", label: "Price" },
-  { key: "marketCap", label: "Market cap" },
+  { key: "marketCap", label: "Market cap", title: "Converted to USD so every market is on one scale" },
   { key: null, label: "Signals" },
 ];
 
@@ -103,9 +104,12 @@ function Move({ ticker, index, movement }: { ticker: string; index: number; move
 export default function ScreenerTable({
   stocks,
   movement,
+  showMarket = false,
 }: {
   stocks: ScoredStock[];
   movement?: Movement;
+  /** Adds a market column — only useful when several markets are merged. */
+  showMarket?: boolean;
 }) {
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "score",
@@ -136,14 +140,17 @@ export default function ScreenerTable({
 
   // The movement column only exists on archive pages, where a previous
   // snapshot is available to compare against.
-  const columns = movement
-    ? [
-        COLUMNS[0],
-        COLUMNS[1],
-        { key: null, label: "Move", title: "Change in rank since the previous snapshot" },
-        ...COLUMNS.slice(2),
-      ]
-    : COLUMNS;
+  const columns = [
+    COLUMNS[0],
+    COLUMNS[1],
+    ...(showMarket
+      ? [{ key: null, label: "Market", title: "Listing market. Stocks are ranked within their own market." }]
+      : []),
+    ...(movement
+      ? [{ key: null, label: "Move", title: "Change in rank since the previous snapshot" }]
+      : []),
+    ...COLUMNS.slice(2),
+  ] as typeof COLUMNS;
 
   const toggle = (key: SortKey | null) => {
     if (!key) return;
@@ -200,6 +207,13 @@ export default function ScreenerTable({
                   </div>
                 </div>
               </td>
+              {showMarket && (
+                <td>
+                  <span className="mkt-tag" title={MARKETS[s.market].label}>
+                    {MARKETS[s.market].code}
+                  </span>
+                </td>
+              )}
               {movement && (
                 <td>
                   <Move ticker={s.ticker} index={i} movement={movement} />
@@ -220,7 +234,16 @@ export default function ScreenerTable({
               <td className="muted">
                 {s.relVolume === null ? "—" : `${s.relVolume.toFixed(1)}x`}
               </td>
-              <td>{fmtPrice(s.close)}</td>
+              <td
+                title={
+                  s.currency === "USD"
+                    ? undefined
+                    : `${fmtPrice(s.close)} ${s.currency} ≈ $${fmtPrice(s.closeUsd)}`
+                }
+              >
+                {fmtPrice(s.close)}
+                {s.currency !== "USD" && <span className="cur">{s.currency}</span>}
+              </td>
               <td className="muted">{fmtCap(s.marketCap)}</td>
               <td>
                 <div className="chips">

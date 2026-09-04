@@ -5,7 +5,10 @@ import ScreenerTable from "@/components/ScreenerTable";
 import Heatmap from "@/components/Heatmap";
 import Methodology from "@/components/Methodology";
 import { AlertIcon, EmptyIcon } from "@/components/Icons";
+import { ALL_MARKETS, MARKET_IDS, MARKETS, type MarketId } from "@/lib/markets";
 import type { ScreenerResponse } from "@/lib/types";
+
+type MarketChoice = MarketId | "all";
 
 type Filters = {
   minMarketCap: number;
@@ -90,6 +93,7 @@ export default function ScreenerPage() {
   const [filters, setFilters] = useState<Filters>(DEFAULTS);
   const [limit, setLimit] = useState(50);
 
+  const [market, setMarket] = useState<MarketChoice>("us");
   const [view, setView] = useState<"table" | "heatmap">("table");
   const [data, setData] = useState<ScreenerResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,6 +106,7 @@ export default function ScreenerPage() {
     setLoading(true);
     setError(null);
     const qs = new URLSearchParams({
+      markets: market === "all" ? MARKET_IDS.join(",") : market,
       minMarketCap: String(filters.minMarketCap),
       maxPctFromHigh: String(filters.maxPctFromHigh),
       minDollarVolume: String(filters.minDollarVolume),
@@ -119,7 +124,7 @@ export default function ScreenerPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters, limit]);
+  }, [filters, limit, market]);
 
   useEffect(() => {
     load();
@@ -138,9 +143,9 @@ export default function ScreenerPage() {
         <div>
           <h1 className="page-title">Momentum screener</h1>
           <p className="page-sub">
-            Every liquid US stock, scored on five factors and ranked against the
-            whole market. Click any column to re-sort; hover the bars and tags
-            for detail.
+            Every liquid stock in the selected market, scored on five factors
+            and ranked against that market. Market caps and liquidity are
+            converted to USD; prices stay in local currency.
           </p>
         </div>
         <div className="stats">
@@ -158,6 +163,29 @@ export default function ScreenerPage() {
           <Stat label="Updated" value={asOf} />
         </div>
       </header>
+
+      <div className="market-tabs">
+        {ALL_MARKETS.map((m) => (
+          <button
+            key={m.id}
+            className={`market-tab${market === m.id ? " on" : ""}`}
+            onClick={() => setMarket(m.id)}
+            aria-pressed={market === m.id}
+          >
+            <span className="market-code">{m.code}</span>
+            {m.label}
+          </button>
+        ))}
+        <button
+          className={`market-tab${market === "all" ? " on" : ""}`}
+          onClick={() => setMarket("all")}
+          aria-pressed={market === "all"}
+          title="Every market at once. Each stock is still ranked against its own market, never pooled."
+        >
+          <span className="market-code">ALL</span>
+          All markets
+        </button>
+      </div>
 
       <div className="presets">
         <span className="presets-label">Quick views:</span>
@@ -270,6 +298,17 @@ export default function ScreenerPage() {
         </button>
       </section>
 
+      {data && data.meta.perMarket.length > 1 && (
+        <div className="legend-strip market-counts">
+          {data.meta.perMarket.map((m) => (
+            <span className="market-count" key={m.market}>
+              <b>{MARKETS[m.market].code}</b> {m.candidateCount} of{" "}
+              {m.universeSize.toLocaleString()} passed
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="legend-strip">
         <span className="legend-bit">
           <b>Score</b> 0–100, ranked against every stock scanned
@@ -317,9 +356,12 @@ export default function ScreenerPage() {
         </div>
       ) : data ? (
         view === "table" ? (
-          <ScreenerTable stocks={data.stocks} />
+          <ScreenerTable stocks={data.stocks} showMarket={market === "all"} />
         ) : (
-          <Heatmap stocks={data.stocks} />
+          <Heatmap
+            stocks={data.stocks}
+            groupBy={market === "all" ? "market" : "sector"}
+          />
         )
       ) : null}
 

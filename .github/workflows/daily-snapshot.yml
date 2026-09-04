@@ -1,21 +1,34 @@
 name: Daily snapshot
 
-# 22:00 UTC on weekdays — 6pm ET during EDT, 5pm ET during EST, so it always
-# lands after the 4pm US close with time for the data to settle.
+# Two schedules, because the markets don't close together. Running everything
+# on one cron would mean capturing Asia ~16 hours stale, on a date that has
+# already rolled over locally.
+#
+#   08:00 UTC -> 17:00 Tokyo / 17:00 Seoul / 16:00 Shanghai  (all closed)
+#   22:00 UTC -> 18:00 New York during EDT, 17:00 during EST (closed)
+#
+# lib/snapshots.ts labels each capture with the market's own trading date and
+# rolls back before the open, so a mistimed run is labelled correctly anyway.
 on:
   schedule:
+    - cron: "0 8 * * 1-5"
     - cron: "0 22 * * 1-5"
   workflow_dispatch:
     inputs:
+      markets:
+        description: "Comma-separated markets, or 'all'"
+        type: string
+        default: all
       force:
-        description: "Overwrite today's snapshot if one already exists"
+        description: "Overwrite existing snapshots for the resolved date"
         type: boolean
         default: false
 
-# Needed to push the captured snapshot back to the repo.
+# Needed to push the captured snapshots back to the repo.
 permissions:
   contents: write
 
+# Never let the Asia and US runs race each other's commits.
 concurrency:
   group: daily-snapshot
   cancel-in-progress: false
@@ -23,7 +36,7 @@ concurrency:
 jobs:
   snapshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -35,17 +48,30 @@ jobs:
 
       - run: npm ci
 
-      - name: Capture today's screen
-        run: npm run snapshot ${{ inputs.force && '-- --force' || '' }}
+      - name: Pick markets for this run
+        id: pick
+        run: |
+          if [ -n "${{ inputs.markets }}" ]; then
+            echo "markets=${{ inputs.markets }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 8 * * 1-5" ]; then
+            echo "markets=japan,korea,china" >> "$GITHUB_OUTPUT"
+          else
+            echo "markets=us" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Commit the snapshot
+      - name: Capture
+        run: npm run snapshot -- --markets=${{ steps.pick.outputs.markets }} ${{ inputs.force && '--force' || '' }}
+
+      - name: Commit the snapshots
         run: |
           if [ -z "$(git status --porcelain data/snapshots)" ]; then
-            echo "No new snapshot — market closed, or today is already captured."
+            echo "Nothing new — markets closed, or already captured."
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/snapshots
-          git commit -m "Snapshot $(TZ=America/New_York date +%Y-%m-%d)"
+          git commit -m "Snapshot: ${{ steps.pick.outputs.markets }}"
+          # The other schedule may have pushed while this run was working.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
           git push

@@ -42,13 +42,15 @@ export default function Landing() {
   return (
     <main className="landing">
       <section className="hero">
-        <span className="eyebrow">Live data · ~1,900 US stocks · No signup</span>
+        <span className="eyebrow">
+          Live data · US, Japan, Korea &amp; China · No signup
+        </span>
         <h1>Find the stocks that are actually trending</h1>
         <p className="hero-sub">
           Most screeners sort by percentage gained, which floats takeover pops
-          and one-day spikes straight to the top. Streak scores every liquid US
-          stock on five separate dimensions of momentum, so what you see is
-          sustained strength — not noise that already happened.
+          and one-day spikes straight to the top. Streak scores every liquid
+          stock across four markets on five separate dimensions of momentum, so
+          what you see is sustained strength — not noise that already happened.
         </p>
         <div className="hero-cta">
           <Link href="/screener" className="btn btn-primary btn-lg">
@@ -92,9 +94,9 @@ export default function Landing() {
         <h2>Five dimensions, scored against the whole market</h2>
         <p className="lead">
           Each stock is measured on five independent factors. Every factor is
-          then ranked against <strong>every other liquid US stock</strong> —
-          so a score of 90 means top-decile of the entire market, not top-decile
-          of a list that was already filtered down to winners.
+          then ranked against <strong>every other liquid stock in its own
+          market</strong> — so a score of 90 means top-decile of that entire
+          market, not top-decile of a list already filtered down to winners.
         </p>
         <div className="factors">
           {FACTORS.map((f) => (
@@ -161,6 +163,41 @@ export default function Landing() {
       </section>
 
       <section className="section">
+        <div className="section-label">Four markets</div>
+        <h2>The United States, Japan, South Korea and China</h2>
+        <p className="lead">
+          Each market is screened and scored <strong>separately</strong>, then
+          the lists are merged. This matters more than it sounds: a percentile
+          is a statement about a stock&rsquo;s peers, and Tokyo and New York can
+          be in completely different regimes. Pooling them would let a flat
+          month in a strong market outrank a good month in a weak one purely
+          because of the company it was measured against.
+        </p>
+        <p className="lead">
+          Prices stay in their local currency — yen, won, yuan — because that is
+          what the market actually quotes. Market caps and the liquidity floor
+          are converted to <strong>USD</strong>, so &ldquo;$1B and up&rdquo; and
+          &ldquo;$10M a day&rdquo; mean the same thing in Seoul as in New York.
+        </p>
+        <div className="market-note-grid">
+          {[
+            { code: "US", label: "United States", detail: "NASDAQ, NYSE, AMEX" },
+            { code: "JP", label: "Japan", detail: "Tokyo Stock Exchange" },
+            { code: "KR", label: "South Korea", detail: "KRX" },
+            { code: "CN", label: "China", detail: "Shanghai & Shenzhen A-shares" },
+          ].map((m) => (
+            <div className="market-note" key={m.code}>
+              <span className="market-code">{m.code}</span>
+              <div>
+                <div className="market-note-label">{m.label}</div>
+                <div className="market-note-detail">{m.detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="section">
         <div className="section-label">Reading the results</div>
         <h2>Every row is tagged with what&rsquo;s happening</h2>
         <div className="legend-grid">
@@ -183,9 +220,9 @@ export default function Landing() {
           a single score is calculated.
         </p>
         <ul className="gate-list">
-          <li><Check /><span><strong>US common stock only</strong> — NASDAQ, NYSE and AMEX. No OTC listings, ETFs, funds, warrants or preferred shares.</span></li>
+          <li><Check /><span><strong>Common stock only</strong> — no OTC listings, ETFs, funds, warrants or preferred shares.</span></li>
           <li><Check /><span><strong>Primary listings only</strong>, so dual share classes don&rsquo;t appear twice.</span></li>
-          <li><Check /><span><strong>Real liquidity</strong> — an adjustable floor on average daily dollar volume, which is the single best filter against thin, manipulated names.</span></li>
+          <li><Check /><span><strong>Real liquidity</strong> — an adjustable floor on average daily volume <em>in USD</em>, which is the single best filter against thin, manipulated names. A share-count floor would be meaningless across markets: 200k shares is trivial for a ¥3,000 Tokyo listing and roughly $150M a day for a ₩1.6M Seoul one.</span></li>
           <li><Check /><span><strong>Genuinely rising</strong> — positive over <em>both</em> one month and three months, not one masking the other.</span></li>
           <li><Check /><span><strong>Trend intact</strong> — price above its 50-day average and the 50-day above the 200-day, so you get uptrends rather than bounces inside downtrends.</span></li>
         </ul>

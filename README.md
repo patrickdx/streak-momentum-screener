@@ -1,8 +1,9 @@
 # Streak — Momentum Screener
 
-US stocks ranked by a five-factor momentum score. Next.js + TypeScript, data
-from the TradingView screener, built on the Geist type and colour scales in a
-light theme.
+Stocks across four markets — **United States, Japan, South Korea and China** —
+ranked by a five-factor momentum score. Next.js + TypeScript, data from the
+TradingView screener, built on the Geist type and colour scales in a light
+theme.
 
 A landing page explaining what the tool does, a live screener with a sortable
 table and a sector heatmap, and an archive of daily snapshots captured
@@ -19,14 +20,18 @@ Open http://localhost:3111. No API keys or `.env` needed — the TradingView
 scanner endpoint is unauthenticated.
 
 - `/` — landing page: what it does, why percentage-sorting fails, the five factors
-- `/screener` — the live table and heatmap
-- `/archive` — every captured day
-- `/archive/<date>` — one day's screen, with rank movement vs. the previous day
+- `/screener` — the live table and heatmap, per market or all four merged
+- `/archive?market=<market>` — every captured day for that market
+- `/archive/<market>/<date>` — one day's screen, with rank movement vs. the previous day
 
 Capture a snapshot by hand at any time:
 
 ```bash
 npm run snapshot
+```
+
+```bash
+npm run snapshot -- --markets=japan,korea --force
 ```
 
 ## Deploying
@@ -115,14 +120,16 @@ evict a perfectly liquid name.
 app/
   page.tsx                landing page
   screener/page.tsx       filters, presets, table/heatmap toggle
-  archive/page.tsx        list of captured days
-  archive/[date]/page.tsx one day, with rank movement
+  archive/page.tsx        captured days, with market tabs
+  archive/[market]/[date]/page.tsx  one day, with rank movement
   api/screener/route.ts   server proxy: validates params, fetches, scores
   globals.css             the whole design system
 lib/
   tradingview.ts          scanner client, column mapping, pagination
   momentum.ts             the scoring engine
   treemap.ts              squarified treemap layout
+  markets.ts              market registry (add a country here)
+  fx.ts                   USD conversion rates
   snapshots.ts            archive read/write, canonical filters
   types.ts  format.ts
 components/
@@ -134,7 +141,7 @@ components/
   Logo.tsx  Icons.tsx
 scripts/
   snapshot.ts             the daily capture job
-data/snapshots/           committed archive, one JSON per trading day
+data/snapshots/<market>/  committed archive, one JSON per market per day
 .github/workflows/        the daily cron
 ```
 
@@ -168,12 +175,60 @@ slice it renders.
 The scanner returns at most 1,000 rows per request, so `fetchUniverse`
 paginates.
 
+## Markets and currency
+
+Adding a country is mostly a row in [lib/markets.ts](lib/markets.ts) — every
+TradingView market endpoint accepts the same column set.
+
+The catch is currency. Each market reports price and market cap in its own
+currency, and **the API has no conversion option**: a top-level `currency`
+key, `options.currency`, and a `market_cap_basic|USD` column suffix were all
+tested and silently ignored. So [lib/fx.ts](lib/fx.ts) pulls spot rates from
+TradingView's own forex endpoint and the scanner client converts. A missing
+rate throws rather than defaulting to 1 — a rate of 1 for KRW would report
+every Korean company at ~1,300x its true size and quietly corrupt the archive.
+
+What that buys: **prices stay in local currency** (yen, won, yuan) because that
+is what the market quotes, while **market cap and the liquidity floor are USD**,
+so "$1B and up" means the same thing in Seoul as in New York. Filter thresholds
+are converted on the way *into* the query rather than fetched and trimmed after.
+
+Two decisions worth knowing:
+
+**Each market is ranked against itself, never pooled.** A percentile is a
+statement about a stock's peers, and Tokyo and New York can be in entirely
+different regimes; pooling would let a flat month in a strong market outrank a
+good month in a weak one purely because of what it was measured against. The
+"All markets" view scores each market independently, then merges — which is
+sound precisely because every score is already a within-market percentile.
+
+**There is no average-share-volume filter.** A fixed share count means
+completely different things across markets: 200k shares is trivial for a ¥3,000
+Tokyo listing and roughly $150M/day for a ₩1.6M Seoul one. It was cutting
+Korea's universe by 40% and Japan's by 20% for no real reason. Liquidity is
+gated purely on USD turnover, which is price- and currency-neutral.
+
 ## The daily archive
 
-`.github/workflows/daily-snapshot.yml` runs at 22:00 UTC on weekdays — 6pm ET
-during EDT, 5pm ET during EST, always after the 4pm close — and commits the
-result to `data/snapshots/<date>.json`. No database, no external storage: the
-repo *is* the archive, and the files are readable without the app.
+`.github/workflows/daily-snapshot.yml` runs on **two** weekday schedules,
+because the markets don't close together:
+
+| Cron | Local time | Captures |
+|---|---|---|
+| `0 8 * * 1-5` | 17:00 Tokyo / 17:00 Seoul / 16:00 Shanghai | Japan, Korea, China |
+| `0 22 * * 1-5` | 18:00 New York (EDT), 17:00 (EST) | United States |
+
+Results are committed to `data/snapshots/<market>/<date>.json`. No database, no
+external storage: the repo *is* the archive, and the files are readable without
+the app.
+
+**Dates are per-market, and rolled back where needed.** At 22:00 UTC it is
+already tomorrow morning in Tokyo, so naively taking the local calendar date
+would file Monday's close under Tuesday — which is exactly what the first
+version did. `tradingDate()` in [lib/snapshots.ts](lib/snapshots.ts) takes the
+market's local date, rolls back a day if the capture happened before that
+market's open, and rolls back across weekends. A mistimed run is therefore
+labelled correctly anyway.
 
 Every snapshot uses `CANONICAL_FILTERS` from [lib/snapshots.ts](lib/snapshots.ts)
 rather than whatever the UI happens to be set to. That is the point of the
@@ -182,9 +237,11 @@ comparing two different questions.
 
 Two guards keep the archive honest:
 
-- **Sanity check.** A healthy run sees ~1,900 names. If the fetch returns fewer
-  than 200, the script throws instead of committing a snapshot that looks
-  broken because the upstream API changed shape or rate-limited us.
+- **Sanity check.** Every market returns hundreds of names. If a fetch returns
+  fewer than 60, that market is failed instead of committing a snapshot that
+  looks broken because the upstream API changed shape, rate-limited us, or an
+  FX rate came back wrong. One market failing doesn't lose the others; all four
+  failing fails the workflow.
 - **Market-holiday guard.** The cron fires every weekday, but on a closed day
   TradingView returns the previous session verbatim. The script fingerprints
   the top 100 closing prices and skips the write when they are identical to the
@@ -195,6 +252,10 @@ doubles like `39.02439024390244`, which was ~45% of each file's bytes and none
 of its information. That took a day from 149 KB to 81 KB, or roughly 20 MB a
 year.
 
+Markets are captured sequentially rather than in parallel — this is a
+background job with no deadline, and four concurrent paginated sweeps is a good
+way to get rate-limited into a failed run.
+
 To backfill or overwrite: `npm run snapshot -- --force --date=2026-09-04`. Note
 this fetches *current* data and files it under the date you name — it can't
 recover a day that was missed.
@@ -202,7 +263,8 @@ recover a day that was missed.
 ## The heatmap
 
 A squarified treemap ([lib/treemap.ts](lib/treemap.ts), Bruls–Huizing–van Wijk),
-grouped by sector, tiles sized by market cap and coloured by momentum score.
+tiles sized by market cap and coloured by momentum score. Grouped by sector for
+a single market, and by market when all four are merged.
 
 Market cap is **square-root scaled** so a $300B name doesn't swallow the canvas
 and leave the $1B names as unreadable slivers. The colour buckets are fixed cut

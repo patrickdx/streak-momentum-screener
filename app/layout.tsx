@@ -8,11 +8,11 @@ const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: {
-    default: "Streak — Momentum Screener for US Stocks",
+    default: "Streak — Momentum Screener",
     template: "%s · Streak",
   },
   description:
-    "Find US stocks on genuine price streaks. Every liquid large cap scored on relative strength, risk-adjusted return, streak consistency, trend structure and volume — not just a one-week pop.",
+    "Find stocks on genuine price streaks across the US, Japan, Korea and China. Every liquid name scored on relative strength, risk-adjusted return, streak consistency, trend structure and volume — not just a one-week pop.",
 };
 
 export default function RootLayout({
