@@ -36,16 +36,25 @@ npm run snapshot -- --markets=japan,korea --force
 
 ## Deploying
 
-It's a standard Next.js app, so anywhere that runs Node works — Vercel, Netlify,
-Railway, Fly, a container, or `npm run build && npm start` on your own box. The
-only requirement is a **server-side runtime**: `/api/screener` has to run on the
-server, so this can't be exported as a purely static site (see below for why).
+The whole app is **static**. `npm run build` writes `out/`, which can be served
+by GitHub Pages, Netlify, S3, or any file server — no Node runtime, no
+database, no environment variables.
+
+`.github/workflows/pages.yml` builds and publishes to GitHub Pages on every
+push to `main`. Because the daily snapshot job commits to `main`, a new trading
+day appears on the live site without anyone doing anything.
+
+A project page is served from `/<repo>`, so assets need that prefix. CI passes
+it via `NEXT_PUBLIC_BASE_PATH` (from `actions/configure-pages`); local dev
+leaves it empty and serves from `/`. `public/.nojekyll` is required — Jekyll
+would otherwise discard `_next/`, since it ignores directories starting with an
+underscore.
+
+To preview the real thing locally:
 
 ```bash
-npm run build && npm start
+NEXT_PUBLIC_BASE_PATH=/streak-momentum-screener npm run build
 ```
-
-Nothing to configure, no environment variables.
 
 ## How momentum is detected
 
@@ -164,16 +173,32 @@ A `top` offset on `thead th` therefore pushes the header *down inside the
 table* and hides the first row, rather than offsetting it from the viewport.
 It has to stay `top: 0`.
 
-## Why the API route exists
+## How it runs without a server
 
-TradingView's scanner sets `Access-Control-Allow-Headers: Referer,Accept`. A
-browser `POST` with `Content-Type: application/json` fails preflight, so the
-request has to be made server-side. The route also does the scoring, which keeps
-~1,900 rows of raw quotes off the wire — the client receives only the ranked
-slice it renders.
+TradingView's scanner replies with `Access-Control-Allow-Headers: Referer,Accept`,
+so a browser `POST` carrying `Content-Type: application/json` trips a preflight
+and is blocked. That is why earlier versions proxied through an API route.
+
+But `text/plain` is a **CORS-safelisted** `Content-Type`, which makes the same
+request a *simple request* — no preflight — and the server parses the body as
+JSON anyway. Verified in a real browser:
+
+| Request | Result |
+|---|---|
+| `Content-Type: application/json` | blocked — failed preflight |
+| `Content-Type: text/plain;charset=UTF-8` | 200 OK |
+| no `Content-Type` header | 200 OK |
+
+So the screener fetches and scores entirely in the browser, the API route is
+gone, and the app ships as static files. The same code runs server-side in the
+snapshot script, so there is one definition of the score
+([lib/screen.ts](lib/screen.ts)).
 
 The scanner returns at most 1,000 rows per request, so `fetchUniverse`
 paginates.
+
+The archive is generated at build time from the committed JSON via
+`generateStaticParams` — one page per market, one per snapshot.
 
 ## Markets and currency
 

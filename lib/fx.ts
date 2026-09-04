@@ -32,12 +32,9 @@ export async function fetchFxRates(markets: MarketId[]): Promise<FxRates> {
 
   const res = await fetch(FOREX_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-    },
+    // See tradingview.ts — text/plain keeps this a preflight-free CORS request
+    // so it works from the browser.
+    headers: { "Content-Type": "text/plain;charset=UTF-8" },
     body: JSON.stringify({
       symbols: { tickers: needed.map((m) => m.fxTicker) },
       columns: ["close"],

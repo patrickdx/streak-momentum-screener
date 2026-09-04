@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ScreenerTable from "@/components/ScreenerTable";
 import Heatmap from "@/components/Heatmap";
 import Methodology from "@/components/Methodology";
 import { AlertIcon, EmptyIcon } from "@/components/Icons";
 import { ALL_MARKETS, MARKET_IDS, MARKETS, type MarketId } from "@/lib/markets";
+import { runScreen } from "@/lib/screen";
 import type { ScreenerResponse } from "@/lib/types";
 
 type MarketChoice = MarketId | "all";
@@ -98,6 +99,8 @@ export default function ScreenerPage() {
   const [data, setData] = useState<ScreenerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Guards against out-of-order responses when filters change quickly. */
+  const runId = useRef(0);
 
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     setFilters((f) => ({ ...f, [key]: value }));
@@ -105,24 +108,32 @@ export default function ScreenerPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const qs = new URLSearchParams({
-      markets: market === "all" ? MARKET_IDS.join(",") : market,
-      minMarketCap: String(filters.minMarketCap),
-      maxPctFromHigh: String(filters.maxPctFromHigh),
-      minDollarVolume: String(filters.minDollarVolume),
-      requireUptrend: String(filters.requireUptrend),
-      limit: String(limit),
-    });
+    // Fetched and scored in the browser: TradingView answers CORS-simple
+    // requests, so there is no server to route through and the whole app can
+    // ship as static files.
+    const run = ++runId.current;
     try {
-      const res = await fetch(`/api/screener?${qs}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
-      setData(json as ScreenerResponse);
+      const result = await runScreen(
+        {
+          ...filters,
+          minPrice: 5,
+          markets: market === "all" ? [...MARKET_IDS] : [market],
+        },
+        limit,
+      );
+      // A slower earlier run must not overwrite a newer one.
+      if (run !== runId.current) return;
+      setData(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
+      if (run !== runId.current) return;
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Something went wrong reaching the market data",
+      );
       setData(null);
     } finally {
-      setLoading(false);
+      if (run === runId.current) setLoading(false);
     }
   }, [filters, limit, market]);
 

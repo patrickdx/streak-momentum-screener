@@ -1763,3 +1763,34 @@ tbody tr:hover .ext {
   color: var(--fg-muted);
   margin-top: 1px;
 }
+
+/* ------------------------ archive index -------------------------- */
+
+.archive-markets {
+  display: grid;
+  gap: 26px;
+  margin-top: 20px;
+}
+
+.archive-market-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.archive-market-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.archive-market .day-card {
+  max-width: 420px;
+}

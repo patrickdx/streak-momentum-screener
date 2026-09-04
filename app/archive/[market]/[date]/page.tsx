@@ -1,11 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { listSnapshotDates, readSnapshot } from "@/lib/snapshots";
+import { listSnapshotDates, listStoredMarkets, readSnapshot } from "@/lib/snapshots";
 import { MARKETS, isMarketId } from "@/lib/markets";
 import SnapshotView from "@/components/SnapshotView";
 
-export const dynamic = "force-dynamic";
+/** One static page per stored snapshot. */
+export async function generateStaticParams() {
+  const stored = await listStoredMarkets();
+  const params: { market: string; date: string }[] = [];
+  for (const market of stored) {
+    for (const date of await listSnapshotDates(market)) {
+      params.push({ market, date });
+    }
+  }
+  return params;
+}
 
 type Props = { params: Promise<{ market: string; date: string }> };
 
@@ -49,7 +59,7 @@ export default async function SnapshotPage({ params }: Props) {
         <div>
           <div className="crumb">
             <Link href="/archive">Archive</Link> <span>/</span>
-            <Link href={`/archive?market=${market}`}>{cfg.label}</Link>{" "}
+            <Link href={`/archive/${market}`}>{cfg.label}</Link>{" "}
             <span>/</span> {date}
           </div>
           <h1 className="page-title">{prettyDate(date)}</h1>

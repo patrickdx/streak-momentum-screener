@@ -152,12 +152,14 @@ async function fetchMarket(
 
     const res = await fetch(scanUrl(cfg.scannerId), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-      },
+      // text/plain is deliberate. TradingView answers with
+      // `Access-Control-Allow-Headers: Referer,Accept`, so a browser POST
+      // carrying `Content-Type: application/json` triggers a preflight that
+      // fails. text/plain is a CORS-safelisted value, which makes this a
+      // "simple request" with no preflight at all — and the server parses the
+      // body as JSON regardless. That is what lets this run straight from the
+      // browser with no proxy, and therefore what makes a static build viable.
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
       body: JSON.stringify(body),
       cache: "no-store",
     });
