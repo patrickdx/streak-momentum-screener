@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Logo from "./Logo";
 import TradingViewChart from "./TradingViewChart";
+import CompanyProfile from "./CompanyProfile";
 import { ExternalIcon } from "./Icons";
 import { breakoutLadder, fetchDetail } from "@/lib/detail";
 import { fetchHistory } from "@/lib/history";
@@ -158,6 +159,11 @@ export default function StockDetail({
         )}
 
         <div className="sheet-body">
+          {/* ---- what the business does ---- */}
+          <section className="sheet-section">
+            <CompanyProfile symbol={stock.ticker} />
+          </section>
+
           {/* ---- score ---- */}
           <section className="sheet-section">
             <h3>Momentum score</h3>

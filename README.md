@@ -289,6 +289,7 @@ recover a day that was missed.
 
 Clicking any row — or any heatmap tile — opens a sheet for that stock:
 
+- **what the business actually does**, in plain English
 - the momentum score with all five components broken out
 - the four streak windows with their individual returns
 - a **breakout ladder**: whether the price is at the top of its 1-month,
@@ -309,6 +310,22 @@ fetch.** On an archive page the row's close is historical while the period
 highs are live; mixing them reports a stock as far below a high it was sitting
 on that day. `fetchDetail` therefore returns the live close alongside the live
 highs, and the card says so.
+
+### Where the business description comes from
+
+TradingView's **symbol-profile** widget. The description is not reachable any
+other way: the scanner exposes a `business_description` column and the
+`/symbol` endpoint accepts the field, but both return `null` for anonymous
+callers, and `fields=all` returns literally `{"all": null}`. The widget's own
+data call lives inside a minified bundle with no documented endpoint behind it,
+which is not something worth depending on.
+
+Unlike the price chart, this widget works for **every market covered here** —
+Tokyo, Seoul and Shenzhen all return full English descriptions even though
+their *price* feeds require a TradingView account.
+
+It sits first in the card, above the score, because "what does this company do"
+is the question you ask before any question about momentum.
 
 ### About the chart
 

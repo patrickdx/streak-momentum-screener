@@ -2376,3 +2376,33 @@ tbody tr:hover .ext {
   .hist-row { grid-template-columns: 80px 34px 1fr 30px; }
   .hist-flags { display: none; }
 }
+
+/* ------------------------ company profile ------------------------ */
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.profile-head h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-subtle);
+  font-weight: 600;
+  margin: 0;
+}
+
+/* The widget ships its own type scale and an oversized ticker heading; trim it
+   back so it reads as part of the card rather than an embedded advert. */
+.profile-body {
+  margin: 0 -4px;
+}
+
+.profile-body iframe {
+  display: block;
+  width: 100% !important;
+}
